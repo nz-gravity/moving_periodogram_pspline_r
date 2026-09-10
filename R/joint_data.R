@@ -32,5 +32,6 @@ prepare_joint <- function(n=1024L, seed=4821L) {
   message("Data-only initial f0, fdot: ",paste(signif(initial/theta_units,6),collapse=", "))
   list(n=n,m=m,truth=truth,signal=signal,noise=noise,x=x,ordinates=ordinates,
        data=data,transform=transform,template=template,prep=prep,B=B,lt=lt,lf=lf,
-       initial=initial,bounds=bounds,whittle_snr=whittle_snr,seed=seed)
+       initial=initial,bounds=bounds,bounds_hz=bounds_hz,theta_units=theta_units,
+       target_snr=target_snr,whittle_snr=whittle_snr,seed=seed)
 }

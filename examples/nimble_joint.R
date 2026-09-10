@@ -27,9 +27,9 @@ case <- list(grid=grid,truth=truth,S=true_psd_ls2(grid$u-1/n,2*pi*grid$f),
              h=display_transform(signal),data=data,B=B_display,draws=draws,summary=summary,
              diagnostics=fit$diagnostics,ok=ok,signal=signal,noise=noise,x=x,ordinates=ordinates,
              settings=list(n=n,m=m,thin=2,kt=8,kf=6,target_snr=40,
-               whittle_snr=whittle_snr,simulation_seed=4821,chain_seeds=501:504,
+               whittle_snr=whittle_snr,simulation_seed=seed,chain_seeds=501:504,
                warmup=warmup,samples=samples,initial=initial/c(n,n^2),bounds=bounds/c(n,n^2),sampler="NIMBLE NUTS + RW_block"),
-             seconds=fit$seconds,compile_seconds=fit$compile_seconds,likelihood_error=fit$likelihood_error)
+             seconds=fit$seconds,compile_seconds=fit$compile_seconds,target_error=fit$target_error)
 saveRDS(case,file.path(out,"case.rds"))
 write.csv(as.data.frame(summary),file.path(out,"summary.csv"),row.names=FALSE)
 writeLines(capture.output(sessionInfo()),file.path(out,"session.txt"))

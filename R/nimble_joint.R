@@ -41,23 +41,41 @@ fit_nimble_joint <- function(d, warmup=1000L, samples=3000L, seed=501L) {
   started <- proc.time()[[3]]
   model <- nimble::nimbleModel(code,constants=constants,
     data=list(dre=Re(d$data),dimag=Im(d$data)),inits=inits,buildDerivs=TRUE)
-  # Independent likelihood check, including the complex-normal constant.
-  expected <- -sum(d$B %*% c0+Mod(d$data-A0*g)^2*exp(-d$B %*% c0))-N*log(pi)
-  actual <- model$calculate(model$getNodeNames(dataOnly=TRUE))
-  stopifnot(abs(actual-expected)<1e-7)
-  conf <- nimble::configureMCMC(model,nodes=NULL,monitors=c("A","f0","fdot","c","phi"))
+  # Verify both data and normalized priors independently, before and after C++ compilation.
+  check_target <- function(m) {
+    q <- ifelse(d$lt+d$lf==0,.01,m$phi[1]*d$lt+m$phi[2]*d$lf+1e-6)
+    eta <- as.vector(d$B %*% m$c)
+    expected <- -sum(eta+Mod(d$data-m$A*d$template(m$theta))^2*exp(-eta))-N*log(pi)+
+      sum(dnorm(m$c,0,1/sqrt(q),log=TRUE))+sum(dgamma(m$phi,2,1,log=TRUE))+
+      dnorm(m$A,0,5,log=TRUE)+sum(dunif(m$theta,d$bounds[,1],d$bounds[,2],log=TRUE))
+    error <- abs(m$calculate()-expected)
+    stopifnot(is.finite(error),error<1e-7)
+    error
+  }
+  target_error <- check_target(model)
+  conf <- nimble::configureMCMC(model,nodes=NULL,print=FALSE,monitors=c("A","f0","fdot","c","phi"))
   conf$addSampler(target=c("c","phi"),type="NUTS",
     control=list(warmupMode="iterations",warmup=warmup,delta=.9))
   # Scale and covariance are in (amplitude, n*f0, n^2*fdot) coordinates.
   propCov <- diag(c(.05,.03,.08)) %*%
     matrix(c(1,0,0,0,1,-.97,0,-.97,1),3) %*% diag(c(.05,.03,.08))
   conf$addSampler(target=c("A","theta"),type="RW_block",control=list(propCov=propCov))
+  stopifnot(length(conf$getUnsampledNodes())==0L)
   mcmc <- nimble::buildMCMC(conf)
+  # Expose nested sampler fields for adaptation controls and divergence counts.
+  old_interfaces <- nimble::getNimbleOption("buildInterfacesForCompiledNestedNimbleFunctions")
+  nimble::nimbleOptions(buildInterfacesForCompiledNestedNimbleFunctions=TRUE)
+  on.exit(nimble::nimbleOptions(buildInterfacesForCompiledNestedNimbleFunctions=old_interfaces))
   compiled <- nimble::compileNimble(model,mcmc)
+  target_error <- max(target_error,check_target(compiled$model))
+  compiled$model$setInits(list(A=A0+.02,theta=d$initial+c(.01,-.02),
+    c=c0+.001,phi=c(1.5,2.5)))
+  target_error <- max(target_error,check_target(compiled$model))
   compile_seconds <- proc.time()[[3]]-started
   started <- proc.time()[[3]]
   sampler <- compiled$mcmc$samplerFunctions[[1]]
   signal_sampler <- compiled$mcmc$samplerFunctions[[2]]
+  stopifnot(length(sampler$numDivergences)==1L,length(signal_sampler$adaptive)==1L)
   diagnostics <- vector("list",4)
   chains <- lapply(1:4,function(ch) {
     message("NIMBLE chain ",ch,"/4")
@@ -69,11 +87,13 @@ fit_nimble_joint <- function(d, warmup=1000L, samples=3000L, seed=501L) {
     divergences_before <- sampler$numDivergences
     signal_sampler$adaptive <- FALSE
     compiled$mcmc$run(samples,reset=FALSE,resetMV=TRUE)
+    draws_ch <- as.matrix(compiled$mcmc$mvSamples)
     diagnostics[[ch]] <<- data.frame(chain=ch,
-      divergences=sampler$numDivergences-divergences_before)
-    as.matrix(compiled$mcmc$mvSamples)
+      divergences=sampler$numDivergences-divergences_before,
+      signal_acceptance=mean(diff(draws_ch[,"A"])!=0))
+    draws_ch
   })
   draws <- posterior::as_draws_array(aperm(simplify2array(chains),c(1,3,2)))
   list(draws=draws,seconds=proc.time()[[3]]-started,compile_seconds=compile_seconds,
-       likelihood_error=abs(actual-expected),diagnostics=do.call(rbind,diagnostics))
+       target_error=target_error,diagnostics=do.call(rbind,diagnostics))
 }
