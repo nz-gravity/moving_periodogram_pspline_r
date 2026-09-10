@@ -5,3 +5,6 @@ results/
 model
 model.hpp
 model.exe
+joint
+joint.exe
+joint.hpp

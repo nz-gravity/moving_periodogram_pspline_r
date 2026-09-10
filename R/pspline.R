@@ -78,8 +78,8 @@ summarize_surface <- function(fit, prepared, grid) {
 
 # Returns one row with worst-case R-hat, ESS, divergences, tree-depth hits,
 # E-BFMI and an overall ok flag. Passing assesses sampling, not calibration.
-fit_diagnostics <- function(fit) {
-  s <- fit$summary(variables = c("c", "phi"))
+fit_diagnostics <- function(fit, variables = c("c", "phi")) {
+  s <- fit$summary(variables = variables)
   d <- fit$diagnostic_summary()
   rhat <- max(s$rhat); ess <- min(s$ess_bulk, s$ess_tail)
   divergences <- sum(d$num_divergent)

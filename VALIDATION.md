@@ -70,3 +70,64 @@ A plotting array-shape error was corrected; completed samples were preserved
 and the remaining fits continued. The final driver smoke run completed and produced
 all three figures. R numerical tests and source parsing passed; PNGs were visually
 inspected for labels, layout and shared scales. PDFs were also exported.
+
+## Earlier independent-TF example (superseded below) and README assets
+
+Saved figures/metric tables from the repeated study are now in `assets/`, with
+source-run provenance. The standalone `examples/blocked_joint.R` uses independent
+complex TF cells, a Gaussian frequency ridge and an unknown tensor-spline variance.
+It uses one exact amplitude Gibbs block and three symmetric MH blocks, including
+log smoothing precisions with determinant/Jacobian terms. It does not require Stan.
+
+Independent normalized-density checks passed for the complex likelihood and prior
+ratio; numerical quadrature verified the Gaussian amplitude conditional. The
+initial 10000-draw run missed the gate for one coefficient (R-hat 1.0114); the
+20000-draw run passes across all parameters: max R-hat 1.00684, min bulk/tail ESS
+1105.22. Sampling/summaries took 8.5 seconds for four sequential chains. Plotting
+uses a display subset of draws; diagnostics use all retained draws. The printed
+acceptance fractions exclude warmup and all adaptation stops at the warmup boundary.
+
+Source output: `results/blocked-20260910-162626/`. Signal and PSD figures were
+visually checked; normalized axes, common row color scales and true/median labels
+are explicit. The injected amplitude lies just outside the 90% interval in this
+single realization, so these assets make no empirical coverage claim. This toy
+uses coefficient variance units and a direct TF generator; no moving-transform
+or physical chirp likelihood has been validated by this exercise.
+
+
+## LS2 time-domain noise plus high-SNR chirp
+
+The joint example now generates the same LS2 process as the noise-only study,
+adds an actual cosine chirp in the time domain, and applies identical cached
+moving Fourier windows to data and every signal proposal. n=1024, dt=1,
+m=16, thinning=2; 8/6 interior time/frequency knots. The known phase is zero.
+The true amplitude 1.93989 gives exact LS2 optimal SNR 40 using the tridiagonal
+covariance. The moving-Whittle approximation gives SNR 40.89.
+
+Tests passed for cached-transform agreement/linearity, a dense-covariance check
+of the exact SNR norm, the complex-template Gaussian amplitude conditional, and
+the centered/non-centered MH rescaling Jacobian. The first real-LS2 run showed
+slow frequency-smoothing mixing. A second smoothing update now jointly rescales
+coefficients at fixed standardized coefficients, preserving the joint target.
+
+Final run: `results/blocked-ls2-20260910-163746/`. Four sequential chains,
+2000 warmup + 20000 retained draws each, max R-hat 1.00683, minimum bulk/tail
+ESS 1086.02; sampling/summaries took 70.7 seconds. Every parameter passed.
+
+| Parameter | Injection | Posterior mean | 90% interval |
+|---|---:|---:|---:|
+| A | 1.93989 | 2.02885 | [1.95224, 2.10617] |
+| f0 [Hz] | 0.12000 | 0.119986 | [0.119942, 0.120031] |
+| fdot [Hz/s] | 0.00012000 | 0.000120035 | [0.000119921, 0.000120149] |
+
+Amplitude is strongly separated from zero but its 90% interval misses the true
+amplitude in this realization. We report that outcome without changing the seed
+or claiming interval calibration. Overlapping complex moving coefficients and
+local-Whittle assumptions remain approximate. The initialization search uses
+only noisy data and the prior box, with local phase-aware refinement. This is
+not a Bayes-factor calculation or a global posterior-mode validation.
+
+The replacement README assets show signal Fourier power and LS2 PSD, not the
+previous artificial TF ridge. Integer-rounded display centers are evaluated
+at their actual times; rendering supports their slightly nonuniform spacing.
+The signal/PSD and diagnostic PNGs were inspected for units, scales and layout.
