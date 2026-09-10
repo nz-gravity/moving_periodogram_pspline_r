@@ -1,0 +1,7 @@
+.Rhistory
+.RData
+.Rproj.user/
+results/
+model
+model.hpp
+model.exe
