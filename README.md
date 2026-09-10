@@ -36,22 +36,25 @@ Eight realizations per n; bands show 90% confidence intervals for mean metrics.
 
 ## Signal + PSD example
 
-Estimate a chirp's amplitude, `(f0, fdot)` and PSD in LS2 noise at injected SNR 40,
-using amplitude Gibbs and blocked Metropolis updates:
+Estimate a chirp's amplitude, `(f0, fdot)` and PSD in 2048 LS2 samples at injected SNR 40,
+alternating NUTS updates for the PSD with block Metropolis updates for the signal:
 
 ```sh
-Rscript examples/blocked_joint.R
+Rscript -e 'install.packages(c("nimbleHMC", "posterior"), repos="https://cloud.r-project.org")'
+Rscript examples/nimble_joint.R
 ```
 
-[Sampler details](examples/BLOCKED.md). An [experimental all-parameter Stan version](examples/STAN.md)
-is also available, but has not been validated.
+[NIMBLE sampler details](examples/NIMBLE.md). Uses built-in samplers; requires a
+C++ toolchain. The earlier [R Gibbs/Metropolis example](examples/BLOCKED.md) is also available.
 
-![Joint signal and noise inference](assets/blocked_joint.png)
+![Joint signal and noise inference](assets/nimble_joint.png)
 
 <details>
-<summary>Signal diagnostics</summary>
+<summary>PSD uncertainty and sampler diagnostics</summary>
 
-![Signal traces and posterior intervals](assets/blocked_signal_diagnostics.png)
+![PSD slices with pointwise intervals](assets/nimble_psd_slices.png)
+
+![Signal traces and posterior intervals](assets/nimble_signal_diagnostics.png)
 
 </details>
 
@@ -83,11 +86,13 @@ plot_spectra(case, file.path(out, "spectra.png"))
 | `R/pspline.R` | `spline_setup`, `basis`: spline bases and penalties; `prepare_model`, `fit_pspline`: Stan fitting; `summarize_surface`, `fit_diagnostics`: summaries |
 | `R/plot.R` | `study_summary`, `plot_study`, `plot_convergence`, `plot_spectra` |
 | `model.stan` | PSD likelihood and spline prior |
-| `R/chirp.R` | Chirp waveform, moving Fourier transform and SNR helpers |
-| `R/blocked.R`, `R/blocked_plot.R` | `blocked_chain`, `plot_blocked`: signal/PSD sampling and figures |
+| `R/chirp.R`, `R/joint_data.R` | Chirp waveform, Fourier transform, SNR and shared LS2/chirp inputs |
+| `R/nimble_joint.R`, `examples/nimble_joint.R` | `fit_nimble_joint`: alternating NUTS/Metropolis fit and example driver |
+| `R/joint_summary.R` | `summarize_joint`: surfaces, diagnostics and fit-quality metrics |
+| `R/blocked.R`, `R/blocked_plot.R` | `blocked_chain`, `plot_blocked`, `plot_joint_slices`: R sampler and shared figures |
 | `examples/one_fit.R`, `examples/blocked_joint.R` | Single-fit and signal/PSD examples |
 | `joint.stan`, `examples/stan_joint.R` | Experimental all-parameter NUTS example |
-| `demo.R` | Repeated-study driver |
+| `demo.R`, `examples/nimble_study.R` | PSD-only and signal/PSD repeated studies |
 | `setup.R`, `tests.R` | Dependencies and numerical checks |
 
 [Validation notes](VALIDATION.md) ·

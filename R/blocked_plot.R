@@ -44,10 +44,11 @@ plot_blocked <- function(case,out) {
     abline(v=case$truth[v],col="red3",lwd=2)
     abline(v=quantile(d[,v],c(.05,.95)),lty=3)
   }
-  mtext(paste("LS2 + chirp; dashed/red = injection; dotted = 90% posterior interval. Gate:",case$ok),
+  mtext(paste("LS2 + chirp; dashed/red = injection; dotted = 90% posterior interval. MCMC checks:",
+              if(case$ok) "passed" else "failed"),
         1,outer=TRUE,line=.4,cex=.8)
   dev.off()
-  # MH has acceptance rates and chain diagnostics, not NUTS divergence/E-BFMI fields.
+  # Common smoothing traces for both sampling implementations.
   png(file.path(out,"psd_diagnostics.png"),1200,900,res=150,bg="white")
   par(mfrow=c(2,2),mar=c(3,4,2,1),oma=c(2,0,0,0))
   for(v in c("phi[1]","phi[2]")) {
@@ -59,5 +60,33 @@ plot_blocked <- function(case,out) {
   }
   mtext(sprintf("All parameters: max R-hat %.3f; min bulk/tail ESS %.0f",
                 max(case$summary$rhat),min(case$summary$ess_bulk,case$summary$ess_tail)),1,outer=TRUE,line=.5)
+  dev.off()
+}
+
+# Frequency and time slices expose uncertainty hidden by a median heatmap.
+plot_joint_slices <- function(case,out) {
+  s <- case$surface
+  if(is.null(s)) {
+    d <- unclass(posterior::as_draws_matrix(case$draws))
+    eta <- d[,sprintf("c[%d]",1:ncol(case$B)),drop=FALSE] %*% t(case$B)
+    s <- cbind(case$grid,lower_log=apply(eta,2,quantile,.05),
+      upper_log=apply(eta,2,quantile,.95),median_psd=exp(apply(eta,2,median)))
+  }
+  png(file.path(out,"psd_slices.png"),1500,900,res=150,bg="white")
+  par(mfrow=c(2,3),mar=c(4,4,2,1),oma=c(2,0,0,0))
+  for(axis in c("u","f")) for(value in if(axis=="u") c(.2,.45,.75) else c(.12,.25,.4)) {
+    chosen <- unique(s[[axis]])[which.min(abs(unique(s[[axis]])-value))]
+    ii <- which(s[[axis]]==chosen)
+    xx <- if(axis=="u") s$f[ii] else s$u[ii]
+    lower <- exp(s$lower_log[ii]); upper <- exp(s$upper_log[ii])
+    truth <- case$S[ii]
+    plot(xx,truth,type="n",log="y",ylim=range(lower,upper,truth),
+      xlab=if(axis=="u") "Frequency [Hz]" else "Rescaled time u",ylab="PSD [per radian]",
+      main=sprintf(if(axis=="u") "u = %.2f" else "f = %.2f Hz",chosen))
+    polygon(c(xx,rev(xx)),c(lower,rev(upper)),col=adjustcolor("#2378A8",.22),border=NA)
+    lines(xx,s$median_psd[ii],col="#2378A8",lwd=2)
+    lines(xx,truth,col="black",lty=2,lwd=2)
+  }
+  mtext("Black dashed: truth; blue: posterior median and pointwise 90% intervals",1,outer=TRUE,line=.4)
   dev.off()
 }

@@ -131,3 +131,115 @@ The replacement README assets show signal Fourier power and LS2 PSD, not the
 previous artificial TF ridge. Integer-rounded display centers are evaluated
 at their actual times; rendering supports their slightly nonuniform spacing.
 The signal/PSD and diagnostic PNGs were inspected for units, scales and layout.
+
+
+## NIMBLE NUTS for PSD, block Metropolis for signal
+
+Run: `results/nimble-ls2-20260910-170348/`, using NIMBLE 1.4.3 and nimbleHMC 0.2.5.
+Four sequential chains, seeds 501–504, 1000 warmup + 3000 retained iterations each.
+Both samplers stop adapting after warmup. NUTS updates all 120 spline coefficients
+and two smoothing precisions; built-in `RW_block` updates amplitude and the two
+cycle-scaled chirp parameters. No custom sampling algorithm is implemented.
+
+The shared input helper exactly reproduces the earlier blocked run's data and
+injection. Independent R versus NIMBLE checks of the complete normalized target
+passed before and after compilation and after changing both parameter blocks;
+maximum absolute difference was 1.25e-11. Existing numerical tests also passed.
+All 125 monitored parameters passed the convergence screen: maximum R-hat 1.00445,
+minimum bulk/tail ESS 983.42, zero post-warmup divergences. Signal acceptance rates
+were 0.305, 0.263, 0.355 and 0.321. Sampling took 155.9 seconds; model setup and
+compilation took 33.7 seconds. No E-BFMI/tree-depth gate is claimed for this interface.
+
+The posterior means of A, f0, fdot and both smoothing precisions differ from the
+previous blocked run by at most 0.067 of that run's corresponding posterior SD.
+This is a same-data consistency check, not a calibration study. The 90% intervals
+are A [1.95096, 2.10383], f0 [0.1199427, 0.1200291] Hz and fdot
+[0.0001199250, 0.0001201436] Hz/s. The amplitude interval again misses the injected
+1.93989; no seed or target was changed to hide this outcome. The approximate
+moving-Whittle likelihood and local initialization caveats still apply.
+
+Signal/PSD comparison and signal trace plots were visually inspected. The
+implementation favors existing library samplers and a small model definition;
+this run was slower than the earlier hand-written blocked sampler, whose draw
+budget differs. No claim of a general speed advantage is made.
+
+
+## Fit-quality and runtime audit
+
+Audit scripts/logs: `results/nimble-audit-20260910/`; the fitted model was unchanged.
+The saved NIMBLE posterior mean signal has amplitude 4.43% above the injection,
+maximum phase offset 0.00415 cycles, and whitened residual signal SNR 1.84
+(compared with injected SNR 40). A local maximum-likelihood fit using the exact,
+known LS2 time-domain covariance gives A=2.02740, close to the joint posterior
+mean (about 2.02574). Thus this realization's amplitude offset is not evidence
+of a NIMBLE-specific signal-fitting failure.
+
+The posterior-mean log PSD has grid RMSE 0.35816 and pointwise 90% interval
+coverage 0.82. This is a single-realization coverage fraction, not a calibrated
+repeated-simulation coverage estimate. With both smoothing precisions fixed at
+the fitted posterior means, penalized MAP fits give log-RMSE 0.37023 after
+subtracting the exact injected signal and 0.36594 after subtracting the estimated
+signal. Their surfaces differ by log-RMS 0.01815. All MAP optimizations converged.
+This check does not refit the smoothing posterior, but suggests that signal
+subtraction is not the main source of the PSD discrepancy.
+
+For context, the same fixed-smoothing MAP fit to the exact expected moving noise
+power (removing realization fluctuations) has log-RMSE 0.14645. The best
+least-squares representation of the log truth in the display-grid spline space
+has error 0.09093; the finite-window expectation differs from the instantaneous
+truth by log-RMS 0.06056. These are diagnostic comparisons, not an additive error
+decomposition. The fit has 496 retained complex observations and 120 spline
+coefficients. Both finite-data fluctuations and smoothing/representation bias
+remain relevant; passing MCMC diagnostics did not establish accurate PSD recovery.
+
+A separate one-chain timing probe (1000 warmup, 500 retained steps, unchanged
+samplers) used NIMBLE's `run(time=TRUE)` and `getTimes()`: PSD NUTS 5.12145 s,
+signal block Metropolis 0.04129 s (99.2% in PSD sampling). The last inspected NUTS
+transition used 31 leapfrog steps; that is not an average over the chain. This
+supports gradient/trajectory work in the PSD block as the dominant sampler cost.
+The full four-chain fit previously took 155.9 s sampling plus 33.7 s setup/compile.
+
+
+## Faster NIMBLE evaluation and n=2048 demonstration
+
+`R/nimble_joint.R` now evaluates the same normalized complex-normal likelihood
+as one vectorized observation node, and samples standardized Gaussian coefficients
+z with c=z/sqrt(q(phi)). NUTS and block Metropolis are still NIMBLE's built-in
+samplers. The independent density check includes the transformation Jacobian;
+maximum absolute target error across the six completed fits was 4.39e-11.
+Both blocks still stop adapting after warmup. Numerical tests passed.
+
+At the original n=1024, seed=4821 dataset, sampling fell from 155.9 to 57.7 seconds
+with the same 1000 warmup/3000 retained budget and four sequential chains. Maximum
+posterior mean shift across the 125 shared quantities was 0.084 of the previous
+posterior SD. Log-PSD RMSE stayed at 0.358. The minimum ESS was 857 (previously 983),
+so the gain is not merely a reduction in useful samples. Including model setup
+and compilation, the recorded time fell from about 190 to 97 seconds. Compilation,
+input preparation, summaries and plotting are not included in sampling time.
+
+The revised example defaults to n=2048, retains 8/6 uniform interior knots and
+SNR 40, and saves pointwise interval slices plus single-realization accuracy
+metrics. `R/joint_summary.R` uses all retained draws for those summaries. The
+physical f0 and fdot are unchanged; the longer observation extends the track.
+
+`results/nimble-study-20260910-233426/` contains the predeclared three seeds
+4821–4823 at each size, run with the revised implementation. All six fits passed:
+maximum R-hat <=1.00601, minimum bulk/tail ESS >=821, and no post-warmup divergences.
+The check monitors both standardized coefficients and the physical coefficients.
+
+| n | Mean log-PSD RMSE | Mean pointwise coverage | Mean log interval width | Mean sampling time |
+|---|---:|---:|---:|---:|
+| 1024 | 0.34016 | 0.83625 | 0.95250 | 58.6 s |
+| 2048 | 0.23627 | 0.85750 | 0.71038 | 121.8 s |
+
+The larger datasets reduced mean error by 30.5% in this small check. Coverage
+remains below nominal 90%; neither these three realizations nor successful MCMC
+diagnostics establish interval calibration. No interval inflation, seed selection,
+or truth-dependent fitting was used. All cases are retained in the metrics CSV.
+
+The representative case was fixed in advance: n=2048, seed=4821. It has log-PSD
+RMSE 0.25233, coverage 0.83125 and residual signal SNR 2.116 for the waveform at
+posterior-mean parameters (injected SNR 40). The updated README heatmaps, traces
+and six PSD slices come from this case. The slices explicitly expose intervals
+that miss the truth. Plots were visually inspected; their sampling-check label
+refers to MCMC computation, not statistical accuracy.
